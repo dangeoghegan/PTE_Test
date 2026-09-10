@@ -199,8 +199,9 @@
 <script>
 
 // --- Configuration & State ---
-// Uses Apps Script service URL if available via templating, otherwise falls back to a hardcoded string
-const GAS_URL = '<?= typeof ScriptApp !== "undefined" ? ScriptApp.getService().getUrl() : "https://script.google.com/macros/s/AKfycbxDtyNNGjVRwmy2j2kYS8V9znLABgOF793Vl0U-iQyzna_R2M4TUIryZH7AifDj7Dox/exec" ?>';
+// Replace the URL below with your actual Google Apps Script Web App Deployment URL
+// Note: Do not use GAS templating (<?= ?>) here if you are hosting this file on GitHub or externally.
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxDtyNNGjVRwmy2j2kYS8V9znLABgOF793Vl0U-iQyzna_R2M4TUIryZH7AifDj7Dox/exec';
 
 // API Helper
 async function callApi(action, payload = {}) {
