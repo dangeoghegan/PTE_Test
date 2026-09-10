@@ -66,7 +66,7 @@
     <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
       <p class="text-sm text-gray-600">Calibrate your microphone and practice your pace. Read the following text aloud. Press and hold to record.</p>
       <div class="p-4 bg-gray-50 rounded border text-base font-serif italic">
-        "Artificial intelligence is transforming industries by improving productivity and enabling smarter decision-making. However, ethical concerns remain an important topic for researchers."
+        "Artificial intelligence is transforming industries by improving productivity and enabling smarter decision-making. However, ethical concerns remain an important topic for researchers. As algorithms become more integrated into daily life, questions about data privacy, algorithmic bias, and the future of work are increasingly prominent. Governments and international bodies are actively debating frameworks to ensure that technological advancements benefit society as a whole while mitigating potential risks. Education systems must adapt to prepare the next generation for a landscape where adaptability and digital literacy are paramount."
       </div>
       <div class="flex items-center gap-4">
         <button id="trainRecordBtn" class="px-6 py-3 bg-red-600 text-white rounded-full font-bold select-none touch-none">Hold to Record</button>
@@ -80,8 +80,8 @@
     <h2 class="text-2xl font-bold">Admin Portal</h2>
     <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
       <h3 class="font-bold text-lg">Mass Upload Exams</h3>
-      <p class="text-sm text-gray-600">Upload up to 10 structured JSON files at once to generate tests.</p>
-      <input type="file" id="massUploadInput" multiple accept=".json" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
+      <p class="text-sm text-gray-600">Upload up to 10 files (.json or .pdf) at once to generate tests. PDF exams will be processed by Gemini AI.</p>
+      <input type="file" id="massUploadInput" multiple accept=".json,.pdf" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
       <button onclick="handleMassUpload()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold">Process Uploads</button>
       <button onclick="generateSampleTest()" class="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-bold ml-2">Generate Sample PTE Exam</button>
       <div id="adminLog" class="text-xs font-mono bg-gray-100 p-3 rounded h-32 overflow-y-auto"></div>
@@ -157,6 +157,7 @@
           <label class="block text-sm font-bold text-gray-700 mb-1">Speed Rate (<span id="rateLabel">0.9</span>)</label>
           <input type="range" id="ttsRate" min="0.5" max="2.0" step="0.1" value="0.9" class="w-full" oninput="document.getElementById('rateLabel').innerText=this.value">
         </div>
+        <button onclick="testTTSVoice()" class="w-full py-2 bg-blue-100 text-blue-700 rounded font-bold mt-2">Test Voice</button>
         <button onclick="saveSettings()" class="w-full py-2 bg-indigo-600 text-white rounded font-bold mt-4">Save</button>
         <button onclick="closeSettings()" class="w-full py-2 bg-gray-200 text-gray-800 rounded font-bold mt-2">Cancel</button>
       </div>
@@ -376,7 +377,7 @@ function generateSampleTest() {
 
 function handleMassUpload() {
   const input = document.getElementById('massUploadInput');
-  if(!input.files.length) return alert('Select JSON files first');
+  if(!input.files.length) return alert('Select .json or .pdf files first');
   const log = document.getElementById('adminLog');
   log.innerHTML = 'Reading files...\n';
 
@@ -385,20 +386,36 @@ function handleMassUpload() {
 
   Array.from(input.files).forEach(file => {
     const reader = new FileReader();
+    const isPdf = file.name.toLowerCase().endsWith('.pdf');
+
     reader.onload = e => {
-      packages.push({fileName: file.name, jsonText: e.target.result});
+      if (isPdf) {
+        // e.target.result is a data URL for PDFs
+        const base64 = e.target.result.split(',')[1];
+        packages.push({fileName: file.name, data: base64, isPdf: true});
+      } else {
+        packages.push({fileName: file.name, data: e.target.result, isPdf: false});
+      }
+
       filesRead++;
       if(filesRead === input.files.length) {
-        log.innerHTML += `Uploading ${packages.length} packages...\n`;
+        log.innerHTML += `Uploading and processing ${packages.length} exams (PDF processing may take up to a minute per file)...\n`;
         callApi('massUploadExams', {packages: packages}).then(res => {
           res.results.forEach(r => {
             log.innerHTML += `> ${r.status === 'success' ? 'Created ' + r.testId : 'Error ' + r.fileName + ': ' + r.message}\n`;
           });
           loadAdmin();
+        }).catch(err => {
+            log.innerHTML += `> Global Error: ${err.message}\n`;
         });
       }
     };
-    reader.readAsText(file);
+
+    if (isPdf) {
+      reader.readAsDataURL(file);
+    } else {
+      reader.readAsText(file);
+    }
   });
 }
 
@@ -432,6 +449,17 @@ function openSettings() {
 
 function closeSettings() {
   document.getElementById('settingsModal').classList.add('hidden');
+}
+
+function testTTSVoice() {
+  const select = document.getElementById('ttsVoiceSelect');
+  const rateInput = document.getElementById('ttsRate');
+  let u = new SpeechSynthesisUtterance("This is a sample of the voice and reading rate you have selected.");
+  u.rate = parseFloat(rateInput.value);
+  const voices = synthesis.getVoices();
+  const selectedVoice = voices.find(v => v.voiceURI === select.value);
+  if (selectedVoice) u.voice = selectedVoice;
+  synthesis.speak(u);
 }
 
 function saveSettings() {

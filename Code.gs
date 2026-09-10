@@ -143,14 +143,20 @@ function getOrCreateVisualFolder_() {
 
 function massUploadExams(payload) {
   if (!payload || !Array.isArray(payload.packages) || payload.packages.length === 0) {
-    throw new Error('No JSON packages were supplied.');
+    throw new Error('No packages were supplied.');
   }
   let results = [];
   payload.packages.forEach((pkg, index) => {
     try {
       if (index >= 10) return; // limit to 10
-      let imported = typeof pkg.jsonText === 'string' ? JSON.parse(pkg.jsonText) : pkg.jsonText;
-      let draft = buildDraftFromPackage_(imported, pkg.fileName || `PTE_Test_${index+1}.json`);
+      let draft;
+      if (pkg.isPdf) {
+         draft = generatePackageFromPdf_(pkg.data, pkg.fileName || `PTE_Test_${index+1}.pdf`);
+      } else {
+         let imported = typeof pkg.data === 'string' ? JSON.parse(pkg.data) : pkg.data;
+         draft = buildDraftFromPackage_(imported, pkg.fileName || `PTE_Test_${index+1}.json`);
+      }
+
       let check = validateDraft_(draft, false);
       draft.status = check.valid ? 'DRAFT — READY FOR REVIEW' : 'DRAFT — REVIEW REQUIRED';
       saveNewDraft_(draft);
@@ -1140,4 +1146,60 @@ function getOverallAnalysis() {
     weakestArea: weakest,
     constructiveFeedback: feedback
   };
+}
+
+function generatePackageFromPdf_(pdfBase64, fileName) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) throw new Error('GEMINI_API_KEY is required for PDF processing.');
+
+  const model = PropertiesService.getScriptProperties().getProperty('GEMINI_VISUAL_MODEL') || GEMINI_VISUAL_MODEL;
+
+  const prompt = `You are a PTE Exam generation system. Extract the test content from the provided PDF into a structured JSON package.
+  Ensure the JSON matches this exact structure:
+  {
+    "title": "Extracted PTE Exam",
+    "blocks": [
+      {
+        "blockId": 1,
+        "passageTitle": "Speaking Tasks",
+        "passageText": "...",
+        "questions": [
+           {"qNum": 1, "type": "speaking", "prompt": "...", "instruction": "...", "acceptedAnswers": ["Practice estimate: 90 / 90"]}
+        ]
+      }
+    ]
+  }
+  Create exactly 50 questions distributed across 4 blocks (1: Speaking Q1-15, 2: Writing Q16-20, 3: Reading Q21-35, 4: Listening Q36-50).
+  Ensure all questions have prompt, instruction, and acceptedAnswers. Multiple choice must have an options array.
+  Do not include markdown blocks, just return raw JSON.`;
+
+  const request = {
+    contents: [{parts: [
+      {inline_data: {mime_type: 'application/pdf', data: String(pdfBase64)}},
+      {text: prompt}
+    ]}],
+    generationConfig: {responseMimeType: 'application/json', temperature: 0.1}
+  };
+
+  const response = UrlFetchApp.fetch(
+    'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(apiKey),
+    {method: 'post', contentType: 'application/json', payload: JSON.stringify(request), muteHttpExceptions: true}
+  );
+
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+    throw new Error('Gemini API failed: ' + response.getContentText().slice(0, 500));
+  }
+
+  let imported;
+  try {
+    const body = JSON.parse(response.getContentText());
+    const candidate = body.candidates && body.candidates[0];
+    const parts = candidate && candidate.content && candidate.content.parts;
+    const text = (parts || []).map(part => part.text || '').join('');
+    imported = JSON.parse(text);
+  } catch (err) {
+    throw new Error('Failed to parse Gemini JSON response: ' + err.message);
+  }
+
+  return buildDraftFromPackage_(imported, fileName);
 }
