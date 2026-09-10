@@ -203,7 +203,7 @@
 // --- Configuration & State ---
 // Replace the URL below with your actual Google Apps Script Web App Deployment URL
 // Note: Do not use GAS templating (<?= ?>) here if you are hosting this file on GitHub or externally.
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwS9zzrH6SToFdCifFXbndY8rqTRVMdIJYUWlsJ1LPfubTnOTn15GWUDBllAYHScAEh/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxDtyNNGjVRwmy2j2kYS8V9znLABgOF793Vl0U-iQyzna_R2M4TUIryZH7AifDj7Dox/exec';
 
 // API Helper
 async function callApi(action, payload = {}) {
@@ -351,14 +351,17 @@ function viewAnalysis(testId) {
 function loadAdmin() {
   callApi('getDraftList').then(drafts => {
     let html = drafts.map(d => `
-      <div class="flex justify-between items-center p-3 border rounded bg-white">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 border rounded bg-white gap-2">
         <div>
           <div class="font-bold text-sm">${d.title}</div>
           <div class="text-xs text-gray-500">${d.status}</div>
         </div>
-        ${d.status === 'PUBLISHED'
-          ? `<button onclick="startTest('${d.testId}')" class="px-3 py-1 bg-indigo-600 text-white rounded font-bold text-xs">Take Test</button>`
-          : `<button onclick="publishDraft('${d.testId}')" class="px-3 py-1 bg-green-600 text-white rounded font-bold text-xs">Publish</button>`}
+        <div class="flex gap-2">
+          ${d.status === 'PUBLISHED'
+            ? `<button onclick="startTest('${d.testId}')" class="px-3 py-1 bg-indigo-600 text-white rounded font-bold text-xs">Take Test</button>`
+            : `<button onclick="publishDraft('${d.testId}')" class="px-3 py-1 bg-green-600 text-white rounded font-bold text-xs">Publish</button>`}
+          <button onclick="deleteTestUI('${d.testId}')" class="px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded font-bold text-xs">Delete</button>
+        </div>
       </div>
     `).join('');
     document.getElementById('draftsList').innerHTML = html;
@@ -419,6 +422,19 @@ function handleMassUpload() {
   });
 }
 
+
+
+function deleteTestUI(testId) {
+  if (!confirm('Are you sure you want to delete this test and all its results?')) return;
+  const log = document.getElementById('adminLog');
+  log.innerHTML += `Deleting ${testId}...\n`;
+  callApi('deleteDraft', {testId: testId}).then(res => {
+    log.innerHTML += `> Deleted successfully.\n`;
+    loadAdmin();
+  }).catch(e => {
+    log.innerHTML += `> Delete failed: ${e.message}\n`;
+  });
+}
 
 function publishDraft(testId) {
   const log = document.getElementById('adminLog');
@@ -866,9 +882,16 @@ function setupRealRecorder(btnId, statusId, targetInputId) {
         reader.readAsDataURL(audioBlob);
         reader.onloadend = () => {
           const base64data = reader.result.split(',')[1];
-          if(input) input.value = base64data;
-          status.innerText = "✅ Audio Saved";
-          if (meter) meter.style.width = '0%';
+          if(input) {
+            input.value = base64data;
+            status.innerText = "✅ Audio Saved. Submitting...";
+            if (meter) meter.style.width = '0%';
+            // Automatically submit answer when button is released
+            checkCurrentAnswer();
+          } else {
+            status.innerText = "✅ Audio Saved (Training)";
+            if (meter) meter.style.width = '0%';
+          }
         };
 
         // Cleanup stream tracks
@@ -891,7 +914,8 @@ function setupRealRecorder(btnId, statusId, targetInputId) {
 
     } catch (err) {
       console.error(err);
-      status.innerText = "❌ Microphone access denied or unavailable";
+      alert('Microphone access denied. Please ensure you have granted permission in your browser settings and are using a secure context (HTTPS or localhost).');
+      status.innerText = "❌ Microphone access denied";
       isRecording = false;
     }
   };
