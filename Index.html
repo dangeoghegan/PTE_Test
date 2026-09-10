@@ -37,7 +37,7 @@
     <div id="historyList" class="space-y-3">
       <p class="text-gray-500">Loading history...</p>
     </div>
-  
+
     <div class="flex justify-between items-center mt-8">
       <h2 class="text-2xl font-bold">Overall Analysis</h2>
       <button onclick="loadOverallAnalysis()" class="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-bold">Load Analysis</button>
@@ -118,12 +118,12 @@
         <span id="qNumber" class="text-xs text-indigo-600 font-bold"></span>
       </div>
       <p id="qInstruction" class="mt-3 text-xs italic text-gray-500"></p>
-      
+
       <!-- TTS Play Button for Listening -->
       <button id="ttsBtn" onclick="playTTS()" class="hidden mt-2 px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">🔊 Listen to Prompt</button>
 
       <div id="qPrompt" class="mt-3 text-base font-semibold leading-6"></div>
-      
+
       <!-- Dynamic Interaction Container -->
       <div id="interactionContainer" class="mt-5"></div>
 
@@ -243,7 +243,7 @@ function nav(viewId) {
   document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
   document.getElementById(viewId).classList.remove('hidden');
   document.getElementById(viewId).classList.add('fade-in');
-  
+
   if(viewId === 'dashboardView') loadDashboard();
   if(viewId === 'adminView') loadAdmin();
 }
@@ -258,11 +258,11 @@ function loadOverallAnalysis() {
       content.innerHTML = `<p class="text-red-600">${res.message}</p>`;
       return;
     }
-    
+
     let color = res.grade.level.includes('Superior') ? 'text-green-600' :
                 res.grade.level.includes('Proficient') ? 'text-blue-600' :
                 res.grade.level.includes('Competent') && !res.grade.level.includes('Below') ? 'text-orange-600' : 'text-red-600';
-                
+
     content.innerHTML = `
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <div class="p-4 bg-gray-50 border rounded text-center">
@@ -354,7 +354,7 @@ function loadAdmin() {
           <div class="font-bold text-sm">${d.title}</div>
           <div class="text-xs text-gray-500">${d.status}</div>
         </div>
-        ${d.status === 'PUBLISHED' 
+        ${d.status === 'PUBLISHED'
           ? `<button onclick="startTest('${d.testId}')" class="px-3 py-1 bg-indigo-600 text-white rounded font-bold text-xs">Take Test</button>`
           : `<button onclick="publishDraft('${d.testId}')" class="px-3 py-1 bg-green-600 text-white rounded font-bold text-xs">Publish</button>`}
       </div>
@@ -378,10 +378,10 @@ function handleMassUpload() {
   if(!input.files.length) return alert('Select JSON files first');
   const log = document.getElementById('adminLog');
   log.innerHTML = 'Reading files...\n';
-  
+
   let packages = [];
   let filesRead = 0;
-  
+
   Array.from(input.files).forEach(file => {
     const reader = new FileReader();
     reader.onload = e => {
@@ -457,20 +457,20 @@ function startTest(testId) {
 function loadBlock(blockId) {
   currentBlock = currentTest.blocks.find(b => b.blockId === blockId);
   if(!currentBlock) return nav('dashboardView'); // Finished all
-  
+
   currentQuestions = currentBlock.questions;
   qIndex = 0;
   responses = {};
   questionTimes = {};
-  
-  
+
+
   // Reset submit button state
   const btn = document.getElementById('submitBlockBtn');
   if (btn) {
     btn.innerText = 'Submit Block';
     btn.disabled = false;
   }
-  
+
   if (currentBlock.passageText) {
     document.getElementById('readingTitle').innerText = currentBlock.title;
     document.getElementById('readingText').innerText = currentBlock.passageText;
@@ -520,10 +520,10 @@ function renderQuestion() {
   document.getElementById('qNumber').innerText = `Question ${q.qNum} of ${currentQuestions[currentQuestions.length-1].qNum}`;
   document.getElementById('qInstruction').innerText = q.instruction;
   document.getElementById('qPrompt').innerText = q.prompt;
-  
+
   document.getElementById('feedback').classList.add('hidden');
   document.getElementById('checkBtn').classList.remove('hidden');
-  
+
   let isLast = (qIndex === currentQuestions.length - 1);
   document.getElementById('nextBtn').classList.add('hidden');
   document.getElementById('submitBlockBtn').classList.add('hidden');
@@ -538,7 +538,7 @@ function renderQuestion() {
 
   let container = document.getElementById('interactionContainer');
   container.innerHTML = '';
-  
+
   // Clean answers function inline
   const cleanStr = (s) => (s||'').replace(/\s+/g, ' ').trim();
   let existing = responses[q.qNum] || '';
@@ -555,7 +555,7 @@ function renderQuestion() {
       </div>
     `;
     setupRealRecorder('arenaRecordBtn', 'arenaRecordStatus', 'ansVal');
-  } 
+  }
   else if (q.type === 'text' || q.type === 'writing' || q.type === 'diagram_label' || q.type === 'table_completion') {
     container.innerHTML = `
       <textarea id="ansVal" rows="4" class="w-full border rounded p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Type your answer here..." oninput="updateWordCount(this)">${existing}</textarea>
@@ -565,7 +565,7 @@ function renderQuestion() {
   }
   else if (q.type === 'multiple_choice' || q.type === 'true_false_not_given') {
     let opts = (q.options && q.options.length) ? q.options : (q.type === 'true_false_not_given' ? ['True', 'False', 'Not Given'] : []);
-    container.innerHTML = `<div class="space-y-2">` + 
+    container.innerHTML = `<div class="space-y-2">` +
       opts.map((opt, i) => `
         <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
           <input type="radio" name="mcq" value="${opt}" class="w-4 h-4 text-indigo-600" ${cleanStr(existing) === cleanStr(opt) ? 'checked' : ''} onchange="document.getElementById('ansVal').value=this.value">
@@ -581,13 +581,13 @@ function updateWordCount(el) {
   let val = el.value.replace(/\s+/g, ' ').trim();
   let count = val ? val.split(' ').length : 0;
   let wc = document.getElementById('wordCount');
-  
+
   if(wc) {
     let q = currentQuestions[qIndex];
     let min = q.MinWordLimit || 0;
     let max = q.MaxWordLimit || Infinity;
     let label = '';
-    
+
     if (min > 0 && max < Infinity) {
       label = ` (Target: ${min}-${max})`;
     } else if (min > 0) {
@@ -595,9 +595,9 @@ function updateWordCount(el) {
     } else if (max < Infinity) {
       label = ` (Max: ${max})`;
     }
-    
+
     wc.innerText = `Words: ${count}${label}`;
-    
+
     // Apply threshold color validation
     let checkBtn = document.getElementById('checkBtn');
     if (min > 0 && max < Infinity) {
@@ -648,7 +648,7 @@ function saveCurrent() {
     let val = el.value.replace(/\s+/g, ' ').trim();
     responses[qNum] = val;
   }
-  
+
   // Track time spent
   if (questionStartTime > 0) {
     let elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
@@ -679,7 +679,7 @@ function checkCurrentAnswer() {
   saveCurrent();
   let q = currentQuestions[qIndex];
   let ans = responses[q.qNum] || '';
-  
+
   document.getElementById('checkBtn').classList.add('hidden');
   let fb = document.getElementById('feedback');
   fb.classList.remove('hidden');
@@ -701,7 +701,7 @@ function checkCurrentAnswer() {
         <div class="text-xs mb-2"><b>Feedback:</b> ${res.explanation}</div>
         <div class="text-xs mb-2"><b>Strategy:</b> ${res.strategy}</div>
       `;
-      
+
       let isLast = (qIndex === currentQuestions.length - 1);
       document.getElementById('nextBtn').classList.toggle('hidden', isLast);
       document.getElementById('submitBlockBtn').classList.toggle('hidden', !isLast);
@@ -720,7 +720,7 @@ function checkCurrentAnswer() {
         <div class="text-xs mb-2">Accepted: ${res.acceptedAnswers.join(' OR ')}</div>
         <div class="text-xs mb-2"><b>Strategy:</b> ${res.strategy}</div>
       `;
-      
+
       let isLast = (qIndex === currentQuestions.length - 1);
       document.getElementById('nextBtn').classList.toggle('hidden', isLast);
       document.getElementById('submitBlockBtn').classList.toggle('hidden', !isLast);
@@ -734,10 +734,10 @@ function checkCurrentAnswer() {
 function showScoreModal(total, grade, scores) {
   const modal = document.getElementById('scoreModal');
   const header = document.getElementById('modalHeader');
-  
+
   document.getElementById('modalTotal').innerText = total;
   document.getElementById('modalLevel').innerText = grade.level;
-  
+
   document.getElementById('scoreS').innerText = scores.speaking;
   document.getElementById('scoreW').innerText = scores.writing;
   document.getElementById('scoreR').innerText = scores.reading;
@@ -748,7 +748,7 @@ function showScoreModal(total, grade, scores) {
   else if(grade.level.includes('Proficient')) header.className += 'bg-blue-500';
   else if(grade.level.includes('Competent') && !grade.level.includes('Below')) header.className += 'bg-orange-500';
   else header.className += 'bg-red-500';
-  
+
   modal.classList.remove('hidden');
 }
 
@@ -761,10 +761,10 @@ function submitBlock() {
   saveCurrent();
   document.getElementById('submitBlockBtn').innerText = 'Submitting...';
   document.getElementById('submitBlockBtn').disabled = true;
-  
+
   callApi('submitBlockAnswers', {
-    testId: currentTest.testId, 
-    blockId: currentBlock.blockId, 
+    testId: currentTest.testId,
+    blockId: currentBlock.blockId,
     answers: responses,
     times: questionTimes,
     feedback: speakingFeedbackCache
@@ -784,7 +784,7 @@ function setupRealRecorder(btnId, statusId, targetInputId) {
   const status = document.getElementById(statusId);
   const input = document.getElementById(targetInputId);
   const meter = document.getElementById('volumeMeter');
-  
+
   let mediaRecorder = null;
   let audioChunks = [];
   let audioContext = null;
@@ -805,7 +805,7 @@ function setupRealRecorder(btnId, statusId, targetInputId) {
     const average = values / length;
     const percentage = Math.min(100, average * 1.5);
     if (meter) meter.style.width = `${percentage}%`;
-    
+
     if (isRecording) {
       animFrame = requestAnimationFrame(updateVolume);
     }
@@ -815,22 +815,22 @@ function setupRealRecorder(btnId, statusId, targetInputId) {
     if (e) e.preventDefault();
     if (isRecording) return;
     isRecording = true;
-    
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunks = [];
       mediaRecorder = new MediaRecorder(stream);
-      
+
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
       analyser = audioContext.createAnalyser();
       microphone = audioContext.createMediaStreamSource(stream);
       microphone.connect(analyser);
       analyser.fftSize = 256;
-      
+
       mediaRecorder.ondataavailable = e => {
         if (e.data.size > 0) audioChunks.push(e.data);
       };
-      
+
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         const reader = new FileReader();
@@ -841,7 +841,7 @@ function setupRealRecorder(btnId, statusId, targetInputId) {
           status.innerText = "✅ Audio Saved";
           if (meter) meter.style.width = '0%';
         };
-        
+
         // Cleanup stream tracks
         stream.getTracks().forEach(track => track.stop());
         if (audioContext && audioContext.state !== 'closed') {
@@ -854,7 +854,7 @@ function setupRealRecorder(btnId, statusId, targetInputId) {
       btn.classList.add('bg-red-800', 'scale-95');
       status.innerText = "🔴 Recording... (Speak now)";
       updateVolume();
-      
+
       // Force stop after 60s max
       setTimeout(() => {
         if (isRecording) stopRec();
@@ -866,18 +866,18 @@ function setupRealRecorder(btnId, statusId, targetInputId) {
       isRecording = false;
     }
   };
-  
+
   const stopRec = (e) => {
     if (e) e.preventDefault();
     if (!isRecording) return;
     isRecording = false;
-    
+
     if (animFrame) cancelAnimationFrame(animFrame);
-    
+
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
     }
-    
+
     btn.classList.remove('bg-red-800', 'scale-95');
     btn.classList.add('bg-red-600');
     status.innerText = "Processing...";
