@@ -629,10 +629,14 @@ function saveAdminDraft(payload) {
 function publishTest(payload) {
   if (!payload || !payload.testId) throw new Error('Test ID is missing.');
 
-  const existingByNumber = {};
-  getQuestions_(payload.testId).forEach(question => { existingByNumber[question.qNum] = question; });
+  // If payload does not contain questions, fetch from the database
+  const existingQuestions = getQuestions_(payload.testId);
+  const sourceQuestions = (payload.questions && payload.questions.length > 0) ? payload.questions : existingQuestions;
 
-  const mergedQuestions = (payload.questions || []).map(question => {
+  const existingByNumber = {};
+  existingQuestions.forEach(question => { existingByNumber[question.qNum] = question; });
+
+  const mergedQuestions = sourceQuestions.map(question => {
     const existing = existingByNumber[Number(question.qNum)] || {};
     return Object.assign({}, existing, question, {
       visualQuestionStart: Number(question.visualQuestionStart || existing.visualQuestionStart || 0),
@@ -642,7 +646,13 @@ function publishTest(payload) {
     });
   });
 
-  const draft = { testId: payload.testId, passages: payload.passages || {}, questions: normaliseQuestions_(mergedQuestions), settings: Object.assign(defaultSettings_(), payload.settings || {}) };
+  // If payload does not contain passages, fetch from the database
+  const passages = payload.passages && Object.keys(payload.passages).length > 0 ? payload.passages : getPassages_(payload.testId);
+
+  // If payload does not contain settings, fetch from the database
+  const settings = payload.settings ? Object.assign(getSettings_(payload.testId), payload.settings) : getSettings_(payload.testId);
+
+  const draft = { testId: payload.testId, passages: passages, questions: normaliseQuestions_(mergedQuestions), settings: settings };
 
   validateDraft_(draft, true);
   draft.questions.forEach(question => { question.requiresReview = false; });
