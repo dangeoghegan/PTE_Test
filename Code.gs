@@ -51,6 +51,7 @@ function handleApiGet(e) {
       case 'getPublishedTest': return jsonResponse({status: 'success', data: getPublishedTest(e.parameter.testId)});
       case 'getUserHistory': return jsonResponse({status: 'success', data: getUserHistory()});
       case 'getTestAnalysis': return jsonResponse({status: 'success', data: getTestAnalysis(e.parameter.testId)});
+      case 'getOverallAnalysis': return jsonResponse(getOverallAnalysis());
       default: return jsonResponse({status: 'error', message: 'Unknown action'});
     }
   } catch(error) {
@@ -99,7 +100,7 @@ function setupEnvironment() {
 }
 
 function questionHeaders_() {
-  return [ 'TestID', 'QuestionNumber', 'BlockID', 'QuestionType', 'Prompt', 'Instruction', 'OptionsJSON', 'AcceptedAnswersJSON', 'Explanation', 'LookoutTip', 'VisualAssetID', 'VisualSourcePage', 'VisualQuestionStart', 'VisualQuestionEnd', 'VisualRequired', 'VisualAltText', 'RequiresReview', 'ReviewNote', 'UpdatedAt' ];
+  return [ 'TestID', 'QuestionNumber', 'BlockID', 'QuestionType', 'Prompt', 'Instruction', 'OptionsJSON', 'AcceptedAnswersJSON', 'Explanation', 'LookoutTip', 'VisualAssetID', 'VisualSourcePage', 'VisualQuestionStart', 'VisualQuestionEnd', 'VisualRequired', 'VisualAltText', 'RequiresReview', 'ReviewNote', 'MinWordLimit', 'MaxWordLimit', 'UpdatedAt' ];
 }
 
 function resetSheet_(ss, sheetName, headers) {
@@ -258,7 +259,9 @@ function normaliseQuestions_(suppliedQuestions) {
       visualRequired: visualRequired,
       requiresReview: q.requiresReview === true || !byNumber[number] || !prompt || !answers.length ||
         (visualRequired && !String(q.visualAssetId || '').trim()),
-      reviewNote: String(q.reviewNote || '')
+      reviewNote: String(q.reviewNote || ''),
+      MinWordLimit: Number(q.MinWordLimit || (String(q.instruction || '').toLowerCase().includes('summarize') ? 5 : String(q.instruction || '').toLowerCase().includes('essay') ? 200 : 0)),
+      MaxWordLimit: Number(q.MaxWordLimit || (String(q.instruction || '').toLowerCase().includes('summarize') ? 75 : String(q.instruction || '').toLowerCase().includes('essay') ? 300 : Infinity))
     });
   }
   return output;
@@ -379,7 +382,7 @@ function questionRow_(testId, question) {
     question.explanation || '', question.lookoutTips || '', question.visualAssetId || '',
     question.visualSourcePage || '', question.visualQuestionStart || '', question.visualQuestionEnd || '',
     question.visualRequired ? 'YES' : 'NO', question.visualAltText || '', question.requiresReview ? 'YES' : 'NO',
-    question.reviewNote || '', new Date().toISOString()
+    question.reviewNote || '', question.MinWordLimit || 0, question.MaxWordLimit || 0, new Date().toISOString()
   ];
 }
 
@@ -477,7 +480,8 @@ function getQuestions_(testId) {
       lookoutTips: row[9], visualAssetId: row[10], visualSourcePage: Number(row[11] || 0),
       visualQuestionStart: Number(row[12] || 0), visualQuestionEnd: Number(row[13] || 0),
       visualRequired: String(row[14]).toUpperCase() === 'YES', visualAltText: row[15] || '',
-      requiresReview: String(row[16]).toUpperCase() === 'YES', reviewNote: row[17] || ''
+      requiresReview: String(row[16]).toUpperCase() === 'YES', reviewNote: row[17] || '',
+      MinWordLimit: Number(row[18] || 0), MaxWordLimit: Number(row[19] || 0)
     }))
     .sort((a, b) => a.qNum - b.qNum);
 }
@@ -1079,4 +1083,56 @@ function generateSamplePteTest() {
 
   saveNewDraft_(draft);
   return getAdminDraft(draft.testId);
+}
+
+function getOverallAnalysis() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const resultSheet = ss.getSheetByName(PTE.SHEETS.RESULTS);
+  if (!resultSheet || resultSheet.getLastRow() < 2) return {status: 'error', message: 'No test history available.'};
+
+  const email = Session.getActiveUser().getEmail() || 'anonymous_candidate';
+  const rows = resultSheet.getDataRange().getValues().slice(1).filter(r => r[1] === email || email === 'anonymous_candidate');
+
+  if (rows.length === 0) return {status: 'error', message: 'No test history available for this user.'};
+
+  let totals = {speaking: 0, writing: 0, reading: 0, listening: 0, count: 0};
+
+  rows.forEach(r => {
+    // block 1 is speaking, 2 is writing, 3 is reading, 4 is listening
+    totals.speaking += Number(r[3] || 0);
+    totals.writing += Number(r[4] || 0);
+    totals.reading += Number(r[5] || 0);
+    totals.listening += Number(r[6] || 0);
+    totals.count++;
+  });
+
+  const avg = {
+    speaking: Math.round(10 + ((totals.speaking / totals.count) / 15) * 80),
+    writing: Math.round(10 + ((totals.writing / totals.count) / 5) * 80),
+    reading: Math.round(10 + ((totals.reading / totals.count) / 15) * 80),
+    listening: Math.round(10 + ((totals.listening / totals.count) / 15) * 80)
+  };
+
+  const grade = pteMigrationLevel_(avg);
+
+  // Provide targeted feedback based on the weakest area
+  let weakest = Object.keys(avg).reduce((a, b) => avg[a] < avg[b] ? a : b);
+  let feedback = '';
+
+  if (weakest === 'speaking') {
+    feedback = "Your speaking score is the lowest. Focus on oral fluency and pronunciation. Practice reading aloud daily, and do not hesitate or self-correct during the exam.";
+  } else if (weakest === 'writing') {
+    feedback = "Your writing score needs improvement. Focus on adhering strictly to word limits, grammatical accuracy, and spelling. Review the structure for summarizing written text and writing essays.";
+  } else if (weakest === 'reading') {
+    feedback = "Your reading score is the weakest area. Practice scanning and skimming techniques. Work on understanding paragraph structures for Re-order Paragraphs and multiple-choice questions.";
+  } else if (weakest === 'listening') {
+    feedback = "Your listening score requires attention. Practice active listening and note-taking. Pay special attention to Write From Dictation and Summarize Spoken Text.";
+  }
+
+  return {
+    averages: avg,
+    grade: grade,
+    weakestArea: weakest,
+    constructiveFeedback: feedback
+  };
 }

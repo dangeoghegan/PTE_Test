@@ -23,6 +23,7 @@
       <button onclick="nav('dashboardView')" class="hover:text-indigo-600">Dashboard</button>
       <button onclick="nav('trainingView')" class="hover:text-indigo-600">Training</button>
       <button onclick="nav('adminView')" class="text-amber-600 hover:text-amber-800">Admin</button>
+      <button onclick="openSettings()" class="text-gray-600 hover:text-gray-800">Settings</button>
     </div>
   </div>
 </nav>
@@ -36,6 +37,15 @@
     <div id="historyList" class="space-y-3">
       <p class="text-gray-500">Loading history...</p>
     </div>
+
+    <div class="flex justify-between items-center mt-8">
+      <h2 class="text-2xl font-bold">Overall Analysis</h2>
+      <button onclick="loadOverallAnalysis()" class="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-bold">Load Analysis</button>
+    </div>
+    <div id="overallAnalysisContent" class="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
+      <p class="text-gray-500 text-sm">Click 'Load Analysis' to view your aggregated performance.</p>
+    </div>
+
   </section>
 
   <!-- Analysis View -->
@@ -133,6 +143,26 @@
 
 </main>
 
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6">
+      <h2 class="text-xl font-bold mb-4">TTS Settings</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-bold text-gray-700 mb-1">Voice</label>
+          <select id="ttsVoiceSelect" class="w-full border rounded p-2 text-sm"></select>
+        </div>
+        <div>
+          <label class="block text-sm font-bold text-gray-700 mb-1">Speed Rate (<span id="rateLabel">0.9</span>)</label>
+          <input type="range" id="ttsRate" min="0.5" max="2.0" step="0.1" value="0.9" class="w-full" oninput="document.getElementById('rateLabel').innerText=this.value">
+        </div>
+        <button onclick="saveSettings()" class="w-full py-2 bg-indigo-600 text-white rounded font-bold mt-4">Save</button>
+        <button onclick="closeSettings()" class="w-full py-2 bg-gray-200 text-gray-800 rounded font-bold mt-2">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+
   <!-- Final Score Modal -->
   <div id="scoreModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all">
@@ -201,8 +231,10 @@ let currentBlock = null;
 let currentQuestions = [];
 let qIndex = 0;
 let responses = {};
+let questionTimes = {};
 let blockStartTime = 0;
 let timerInterval = null;
+let questionStartTime = 0;
 let synthesis = window.speechSynthesis;
 
 // --- Navigation ---
@@ -216,6 +248,51 @@ function nav(viewId) {
 }
 
 // --- Dashboard ---
+
+function loadOverallAnalysis() {
+  const content = document.getElementById('overallAnalysisContent');
+  content.innerHTML = '<p>Loading overall analysis...</p>';
+  callApi('getOverallAnalysis').then(res => {
+    if (res.status === 'error') {
+      content.innerHTML = `<p class="text-red-600">${res.message}</p>`;
+      return;
+    }
+
+    let color = res.grade.level.includes('Superior') ? 'text-green-600' :
+                res.grade.level.includes('Proficient') ? 'text-blue-600' :
+                res.grade.level.includes('Competent') && !res.grade.level.includes('Below') ? 'text-orange-600' : 'text-red-600';
+
+    content.innerHTML = `
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div class="p-4 bg-gray-50 border rounded text-center">
+          <div class="text-xs text-gray-500 font-bold uppercase tracking-wider">Listening</div>
+          <div class="text-2xl font-black text-indigo-600">${res.averages.listening}</div>
+        </div>
+        <div class="p-4 bg-gray-50 border rounded text-center">
+          <div class="text-xs text-gray-500 font-bold uppercase tracking-wider">Reading</div>
+          <div class="text-2xl font-black text-indigo-600">${res.averages.reading}</div>
+        </div>
+        <div class="p-4 bg-gray-50 border rounded text-center">
+          <div class="text-xs text-gray-500 font-bold uppercase tracking-wider">Writing</div>
+          <div class="text-2xl font-black text-indigo-600">${res.averages.writing}</div>
+        </div>
+        <div class="p-4 bg-gray-50 border rounded text-center">
+          <div class="text-xs text-gray-500 font-bold uppercase tracking-wider">Speaking</div>
+          <div class="text-2xl font-black text-indigo-600">${res.averages.speaking}</div>
+        </div>
+      </div>
+      <div class="mb-4">
+        <span class="font-bold">Average Overall Level: </span>
+        <span class="font-black uppercase tracking-wider ${color}">${res.grade.level}</span>
+      </div>
+      <div class="p-4 border-l-4 border-amber-500 bg-amber-50">
+        <h3 class="font-bold text-amber-800 mb-1">Constructive Feedback (Weakest Area: ${res.weakestArea.toUpperCase()})</h3>
+        <p class="text-sm text-amber-900">${res.constructiveFeedback}</p>
+      </div>
+    `;
+  });
+}
+
 function loadDashboard() {
   document.getElementById('historyList').innerHTML = 'Loading history...';
   callApi('getUserHistory').then(renderDashboard).catch(e => document.getElementById('historyList').innerHTML = '<p>Error loading history.</p>');
@@ -335,6 +412,37 @@ function publishDraft(testId) {
   });
 }
 
+
+function openSettings() {
+  const select = document.getElementById('ttsVoiceSelect');
+  select.innerHTML = '';
+  synthesis.getVoices().forEach(v => {
+    let opt = document.createElement('option');
+    opt.value = v.voiceURI;
+    opt.innerText = v.name;
+    if (v.voiceURI === ttsSettings.voiceUri) opt.selected = true;
+    select.appendChild(opt);
+  });
+  document.getElementById('ttsRate').value = ttsSettings.rate;
+  document.getElementById('rateLabel').innerText = ttsSettings.rate;
+  document.getElementById('settingsModal').classList.remove('hidden');
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.add('hidden');
+}
+
+function saveSettings() {
+  ttsSettings.voiceUri = document.getElementById('ttsVoiceSelect').value;
+  ttsSettings.rate = parseFloat(document.getElementById('ttsRate').value);
+  closeSettings();
+}
+
+// Ensure voices are loaded
+if (speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = () => {};
+}
+
 // --- Arena / Test Logic ---
 function startTest(testId) {
   callApi('getPublishedTest', {testId: testId}).then(res => {
@@ -352,6 +460,7 @@ function loadBlock(blockId) {
   currentQuestions = currentBlock.questions;
   qIndex = 0;
   responses = {};
+  questionTimes = {};
 
 
   // Reset submit button state
@@ -403,6 +512,7 @@ function updateTimer() {
 }
 
 function renderQuestion() {
+  questionStartTime = Date.now();
   synthesis.cancel(); // stop any playing audio
   let q = currentQuestions[qIndex];
   document.getElementById('qType').innerText = q.type;
@@ -473,16 +583,16 @@ function updateWordCount(el) {
 
   if(wc) {
     let q = currentQuestions[qIndex];
-    let min = 0, max = Infinity;
+    let min = q.MinWordLimit || 0;
+    let max = q.MaxWordLimit || Infinity;
     let label = '';
 
-    // Determine dynamic limits based on instruction type
-    if (q.instruction && q.instruction.toLowerCase().includes('summarize')) {
-      min = 5; max = 75;
-      label = ` (Target: 5-75)`;
-    } else if (q.instruction && q.instruction.toLowerCase().includes('essay')) {
-      min = 200; max = 300;
-      label = ` (Target: 200-300)`;
+    if (min > 0 && max < Infinity) {
+      label = ` (Target: ${min}-${max})`;
+    } else if (min > 0) {
+      label = ` (Min: ${min})`;
+    } else if (max < Infinity) {
+      label = ` (Max: ${max})`;
     }
 
     wc.innerText = `Words: ${count}${label}`;
@@ -514,18 +624,35 @@ function updateWordCount(el) {
   }
 }
 
+
+// --- TTS Settings ---
+let ttsSettings = { voiceUri: '', rate: 0.9 };
 function playTTS() {
   let text = document.getElementById('qPrompt').innerText;
   let u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.9;
+  u.rate = ttsSettings.rate;
+  if (ttsSettings.voiceUri) {
+    const voices = synthesis.getVoices();
+    const selectedVoice = voices.find(v => v.voiceURI === ttsSettings.voiceUri);
+    if (selectedVoice) u.voice = selectedVoice;
+  }
   synthesis.speak(u);
 }
 
+
 function saveCurrent() {
+  let qNum = currentQuestions[qIndex].qNum;
   let el = document.getElementById('ansVal');
   if(el) {
     let val = el.value.replace(/\s+/g, ' ').trim();
-    responses[currentQuestions[qIndex].qNum] = val;
+    responses[qNum] = val;
+  }
+
+  // Track time spent
+  if (questionStartTime > 0) {
+    let elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
+    questionTimes[qNum] = (questionTimes[qNum] || 0) + elapsed;
+    questionStartTime = Date.now(); // reset for next tracking period
   }
 }
 
@@ -638,6 +765,7 @@ function submitBlock() {
     testId: currentTest.testId,
     blockId: currentBlock.blockId,
     answers: responses,
+    times: questionTimes,
     feedback: speakingFeedbackCache
   }).then(res => {
     if(currentBlock.blockId < 4) {
