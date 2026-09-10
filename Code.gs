@@ -27,7 +27,7 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.action) {
     return handleApiGet(e);
   }
-  return HtmlService.createTemplateFromFile('Index')
+  return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('PTE Exam')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
