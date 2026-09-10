@@ -67,6 +67,11 @@ function handleApiPost(e) {
     }
     const action = payload.action;
     switch(action) {
+      case 'getDraftList': return jsonResponse({status: 'success', data: getDraftList()});
+      case 'getPublishedTest': return jsonResponse({status: 'success', data: getPublishedTest(payload.testId)});
+      case 'getUserHistory': return jsonResponse({status: 'success', data: getUserHistory()});
+      case 'getTestAnalysis': return jsonResponse({status: 'success', data: getTestAnalysis(payload.testId)});
+      case 'getOverallAnalysis': return jsonResponse(getOverallAnalysis());
       case 'importStructuredTestPackage': return jsonResponse(importStructuredTestPackage(payload));
       case 'massUploadExams': return jsonResponse(massUploadExams(payload));
       case 'saveAdminDraft': return jsonResponse(saveAdminDraft(payload));
@@ -77,7 +82,7 @@ function handleApiPost(e) {
       case 'assessPteSpeakingWithGemini': return jsonResponse(assessPteSpeakingWithGemini(payload));
       case 'checkAnswer': return jsonResponse(checkAnswer(payload));
       case 'generateSamplePteTest': return jsonResponse(generateSamplePteTest());
-      default: return jsonResponse({status: 'error', message: 'Unknown action'});
+      default: return jsonResponse({status: 'error', message: 'Unknown action (' + action + ')'});
     }
   } catch(error) {
     return jsonResponse({status: 'error', message: error.message});
