@@ -200,7 +200,7 @@
 
 // --- Configuration & State ---
 // Uses Apps Script service URL if available via templating, otherwise falls back to a hardcoded string
-const GAS_URL = '<?= typeof ScriptApp !== "undefined" ? ScriptApp.getService().getUrl() : "https://script.google.com/macros/s/AKfycbz_REPLACE_ME_DEPLOYMENT_ID/exec" ?>';
+const GAS_URL = '<?= typeof ScriptApp !== "undefined" ? ScriptApp.getService().getUrl() : "https://script.google.com/macros/s/AKfycbwibTZ-zvoRn2GMS_N-Zh0GlmKB6xD72r-uFD_bQya9P2tkjDC3BY-J035bo5eDvLUZ/exec" ?>';
 
 // API Helper
 async function callApi(action, payload = {}) {
