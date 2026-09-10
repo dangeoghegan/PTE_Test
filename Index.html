@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PTE Exam</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .hidden { display: none !important; }
+    .reader { white-space: pre-wrap; font-family: serif; }
+    .fade-in { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body class="bg-gray-100 text-slate-800 font-sans min-h-screen flex flex-col">
+
+<!-- Navigation -->
+<nav class="bg-white border-b shadow-sm sticky top-0 z-50">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+    <div class="font-bold text-xl text-indigo-700">PTE Exam Portal</div>
+    <div class="space-x-4 text-sm font-semibold">
+      <button onclick="nav('dashboardView')" class="hover:text-indigo-600">Dashboard</button>
+      <button onclick="nav('trainingView')" class="hover:text-indigo-600">Training</button>
+      <button onclick="nav('adminView')" class="text-amber-600 hover:text-amber-800">Admin</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Main Container -->
+<main class="flex-1 w-full max-w-5xl mx-auto p-4 flex flex-col">
+
+  <!-- Dashboard View -->
+  <section id="dashboardView" class="view-section space-y-6">
+    <h2 class="text-2xl font-bold">Your Results Dashboard</h2>
+    <div id="historyList" class="space-y-3">
+      <p class="text-gray-500">Loading history...</p>
+    </div>
+  </section>
+
+  <!-- Analysis View -->
+  <section id="analysisView" class="view-section hidden space-y-6">
+    <div class="flex justify-between items-center">
+      <h2 class="text-2xl font-bold">Test Analysis</h2>
+      <button onclick="nav('dashboardView')" class="px-4 py-2 bg-gray-200 rounded-lg text-sm font-bold">Back</button>
+    </div>
+    <div id="analysisContent" class="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
+      <p>Loading analysis...</p>
+    </div>
+  </section>
+
+  <!-- Training View -->
+  <section id="trainingView" class="view-section hidden space-y-6">
+    <h2 class="text-2xl font-bold">Speech Training</h2>
+    <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
+      <p class="text-sm text-gray-600">Calibrate your microphone and practice your pace. Read the following text aloud. Press and hold to record.</p>
+      <div class="p-4 bg-gray-50 rounded border text-base font-serif italic">
+        "Artificial intelligence is transforming industries by improving productivity and enabling smarter decision-making. However, ethical concerns remain an important topic for researchers."
+      </div>
+      <div class="flex items-center gap-4">
+        <button id="trainRecordBtn" class="px-6 py-3 bg-red-600 text-white rounded-full font-bold select-none touch-none">Hold to Record</button>
+        <span id="trainStatus" class="text-sm font-bold text-gray-500">Ready</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Admin View -->
+  <section id="adminView" class="view-section hidden space-y-6">
+    <h2 class="text-2xl font-bold">Admin Portal</h2>
+    <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
+      <h3 class="font-bold text-lg">Mass Upload Exams</h3>
+      <p class="text-sm text-gray-600">Upload up to 10 structured JSON files at once to generate tests.</p>
+      <input type="file" id="massUploadInput" multiple accept=".json" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
+      <button onclick="handleMassUpload()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold">Process Uploads</button>
+      <div id="adminLog" class="text-xs font-mono bg-gray-100 p-3 rounded h-32 overflow-y-auto"></div>
+    </div>
+    <div id="draftsList" class="space-y-3 mt-6"></div>
+  </section>
+
+  <!-- Reading/Passage View -->
+  <section id="readingView" class="view-section hidden flex-1 max-w-3xl mx-auto w-full">
+    <article class="min-h-[600px] bg-white rounded-2xl border shadow-sm flex flex-col">
+      <header class="p-5 bg-gray-50 border-b">
+        <div class="text-xs font-bold uppercase tracking-wider text-indigo-600">Reading Stage</div>
+        <h1 id="readingTitle" class="mt-1 text-xl font-bold"></h1>
+      </header>
+      <div id="readingText" class="reader flex-1 overflow-y-auto p-5 text-base leading-7" onscroll="checkReadingScroll(this)"></div>
+      <footer class="p-4 border-t bg-gray-50">
+        <button id="beginQuestions" onclick="startQuestions()" disabled class="w-full py-3 rounded-xl bg-gray-300 text-white text-sm font-bold cursor-not-allowed">Read passage to unlock</button>
+      </footer>
+    </article>
+  </section>
+
+  <!-- Question View (Arena) -->
+  <section id="questionView" class="view-section hidden flex-1 max-w-xl mx-auto w-full relative">
+    <div class="flex justify-between mb-3 gap-3">
+      <button onclick="nav('readingView')" class="px-3 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700">View Passage</button>
+      <div class="text-right">
+        <div id="questionCounter" class="text-xs font-bold"></div>
+        <div id="timer" class="text-xs font-bold text-amber-700 p-2 bg-amber-100 border border-amber-500 rounded-xl font-mono">00:00</div>
+      </div>
+    </div>
+
+    <article class="bg-white border rounded-2xl shadow-sm p-5">
+      <div class="flex justify-between gap-3 border-b pb-3">
+        <span id="qType" class="text-[10px] uppercase tracking-wider bg-gray-100 rounded px-2 py-1 font-bold"></span>
+        <span id="qNumber" class="text-xs text-indigo-600 font-bold"></span>
+      </div>
+      <p id="qInstruction" class="mt-3 text-xs italic text-gray-500"></p>
+
+      <!-- TTS Play Button for Listening -->
+      <button id="ttsBtn" onclick="playTTS()" class="hidden mt-2 px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">🔊 Listen to Prompt</button>
+
+      <div id="qPrompt" class="mt-3 text-base font-semibold leading-6"></div>
+
+      <!-- Dynamic Interaction Container -->
+      <div id="interactionContainer" class="mt-5"></div>
+
+      <!-- Feedback -->
+      <div id="feedback" class="hidden mt-4 p-4 rounded-xl border"></div>
+    </article>
+
+    <footer class="flex justify-between mt-4">
+      <button onclick="prevQuestion()" class="px-4 py-3 rounded-xl bg-gray-200 text-xs font-bold">Previous</button>
+      <div class="flex gap-2">
+        <button id="checkBtn" onclick="checkCurrentAnswer()" class="px-5 py-3 rounded-xl bg-amber-500 text-white text-xs font-bold">Check</button>
+        <button id="nextBtn" onclick="nextQuestion()" class="px-5 py-3 rounded-xl bg-indigo-600 text-white text-xs font-bold hidden">Next</button>
+        <button id="submitBlockBtn" onclick="submitBlock()" class="hidden px-5 py-3 rounded-xl bg-green-600 text-white text-xs font-bold">Submit Block</button>
+      </div>
+    </footer>
+  </section>
+
+</main>
+
+<script>
+// --- State ---
+let currentTest = null;
+let currentBlock = null;
+let currentQuestions = [];
+let qIndex = 0;
+let responses = {};
+let blockStartTime = 0;
+let timerInterval = null;
+let synthesis = window.speechSynthesis;
+
+// --- Navigation ---
+function nav(viewId) {
+  document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+  document.getElementById(viewId).classList.remove('hidden');
+  document.getElementById(viewId).classList.add('fade-in');
+
+  if(viewId === 'dashboardView') loadDashboard();
+  if(viewId === 'adminView') loadAdmin();
+}
+
+// --- Dashboard ---
+function loadDashboard() {
+  document.getElementById('historyList').innerHTML = 'Loading history...';
+  google.script.run.withSuccessHandler(renderDashboard).getUserHistory();
+}
+
+function renderDashboard(res) {
+  if(!res || !res.length) {
+    document.getElementById('historyList').innerHTML = '<p>No test history found.</p>';
+    return;
+  }
+  let html = res.map(h => {
+    let color = h.band.includes('Superior') ? 'bg-green-100 border-green-500 text-green-800' :
+                h.band.includes('Proficient') ? 'bg-blue-100 border-blue-500 text-blue-800' :
+                h.band.includes('Competent') ? 'bg-orange-100 border-orange-500 text-orange-800' :
+                'bg-red-100 border-red-500 text-red-800';
+    return `
+      <div class="p-4 border rounded-xl bg-white shadow-sm flex justify-between items-center">
+        <div>
+          <div class="font-bold">${h.date}</div>
+          <div class="text-xs text-gray-500">Test ID: ${h.testId} | Total: ${h.total}/50</div>
+        </div>
+        <div class="text-right flex items-center gap-4">
+          <div class="px-3 py-1 rounded-full border-2 font-bold text-sm ${color}">${h.band}</div>
+          <button onclick="viewAnalysis('${h.testId}')" class="text-xs font-bold text-indigo-600 underline">Analysis</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('historyList').innerHTML = html;
+}
+
+// --- Analysis ---
+function viewAnalysis(testId) {
+  nav('analysisView');
+  document.getElementById('analysisContent').innerHTML = 'Loading analysis...';
+  google.script.run.withSuccessHandler(res => {
+    if(!res.errors || !res.errors.length) {
+      document.getElementById('analysisContent').innerHTML = '<p>No errors found or no data available.</p>';
+      return;
+    }
+    let html = res.errors.map(err => `
+      <div class="border-b pb-2 mb-2">
+        <div class="font-bold text-sm text-red-600">Q${err.qNum} answered incorrectly</div>
+        <div class="text-xs bg-gray-50 p-2 rounded mt-1">Your answer: ${err.userAnswer || '[Blank]'}</div>
+        <div class="text-xs text-gray-500 mt-1 italic">Tip: Focus on the specific strategy for this question type. Check spelling and word limits carefully.</div>
+      </div>
+    `).join('');
+    document.getElementById('analysisContent').innerHTML = html;
+  }).getTestAnalysis(testId);
+}
+
+// --- Admin ---
+function loadAdmin() {
+  google.script.run.withSuccessHandler(drafts => {
+    let html = drafts.map(d => `
+      <div class="flex justify-between items-center p-3 border rounded bg-white">
+        <div>
+          <div class="font-bold text-sm">${d.title}</div>
+          <div class="text-xs text-gray-500">${d.status}</div>
+        </div>
+        ${d.status === 'PUBLISHED'
+          ? `<button onclick="startTest('${d.testId}')" class="px-3 py-1 bg-indigo-600 text-white rounded text-xs">Take Test</button>`
+          : ''}
+      </div>
+    `).join('');
+    document.getElementById('draftsList').innerHTML = html;
+  }).getDraftList();
+}
+
+function handleMassUpload() {
+  const input = document.getElementById('massUploadInput');
+  if(!input.files.length) return alert('Select JSON files first');
+  const log = document.getElementById('adminLog');
+  log.innerHTML = 'Reading files...\n';
+
+  let packages = [];
+  let filesRead = 0;
+
+  Array.from(input.files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      packages.push({fileName: file.name, jsonText: e.target.result});
+      filesRead++;
+      if(filesRead === input.files.length) {
+        log.innerHTML += `Uploading ${packages.length} packages...\n`;
+        google.script.run.withSuccessHandler(res => {
+          res.results.forEach(r => {
+            log.innerHTML += `> ${r.status === 'success' ? 'Created ' + r.testId : 'Error ' + r.fileName + ': ' + r.message}\n`;
+          });
+          loadAdmin();
+        }).massUploadExams({packages: packages});
+      }
+    };
+    reader.readAsText(file);
+  });
+}
+
+// --- Arena / Test Logic ---
+function startTest(testId) {
+  google.script.run.withSuccessHandler(res => {
+    if(!res) return alert('Test not found');
+    currentTest = res;
+    // Start block 1 (Speaking)
+    loadBlock(1);
+  }).getPublishedTest(testId);
+}
+
+function loadBlock(blockId) {
+  currentBlock = currentTest.blocks.find(b => b.blockId === blockId);
+  if(!currentBlock) return nav('dashboardView'); // Finished all
+
+  currentQuestions = currentBlock.questions;
+  qIndex = 0;
+  responses = {};
+
+  if (currentBlock.passageText) {
+    document.getElementById('readingTitle').innerText = currentBlock.title;
+    document.getElementById('readingText').innerText = currentBlock.passageText;
+    document.getElementById('beginQuestions').disabled = true;
+    document.getElementById('beginQuestions').classList.add('cursor-not-allowed', 'bg-gray-300');
+    document.getElementById('beginQuestions').classList.remove('bg-indigo-600');
+    nav('readingView');
+    setTimeout(() => checkReadingScroll(document.getElementById('readingText')), 100);
+  } else {
+    startQuestions();
+  }
+}
+
+function checkReadingScroll(el) {
+  if (el.scrollHeight - el.scrollTop <= el.clientHeight + 50) {
+    let btn = document.getElementById('beginQuestions');
+    btn.disabled = false;
+    btn.classList.remove('cursor-not-allowed', 'bg-gray-300');
+    btn.classList.add('bg-indigo-600');
+    btn.innerText = 'Start Questions';
+  }
+}
+
+function startQuestions() {
+  blockStartTime = Date.now();
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 1000);
+  nav('questionView');
+  renderQuestion();
+}
+
+function updateTimer() {
+  let elapsed = Math.floor((Date.now() - blockStartTime)/1000);
+  let limit = currentBlock.timeLimitMinutes * 60;
+  let remain = limit - elapsed;
+  if(remain <= 0) remain = 0;
+  let m = Math.floor(remain / 60).toString().padStart(2, '0');
+  let s = (remain % 60).toString().padStart(2, '0');
+  document.getElementById('timer').innerText = `${m}:${s}`;
+}
+
+function renderQuestion() {
+  synthesis.cancel(); // stop any playing audio
+  let q = currentQuestions[qIndex];
+  document.getElementById('qType').innerText = q.type;
+  document.getElementById('qNumber').innerText = `Question ${q.qNum} of ${currentQuestions[currentQuestions.length-1].qNum}`;
+  document.getElementById('qInstruction').innerText = q.instruction;
+  document.getElementById('qPrompt').innerText = q.prompt;
+
+  document.getElementById('feedback').classList.add('hidden');
+  document.getElementById('checkBtn').classList.remove('hidden');
+
+  let isLast = (qIndex === currentQuestions.length - 1);
+  document.getElementById('nextBtn').classList.add('hidden');
+  document.getElementById('submitBlockBtn').classList.toggle('hidden', !isLast);
+
+  if (q.type === 'listening' || currentBlock.blockId === 4) {
+    document.getElementById('ttsBtn').classList.remove('hidden');
+  } else {
+    document.getElementById('ttsBtn').classList.add('hidden');
+  }
+
+  let container = document.getElementById('interactionContainer');
+  container.innerHTML = '';
+
+  // Clean answers function inline
+  const cleanStr = (s) => (s||'').replace(/\s+/g, ' ').trim();
+  let existing = responses[q.qNum] || '';
+
+  if (q.type === 'speaking') {
+    container.innerHTML = `
+      <div class="flex flex-col items-center gap-4 py-6 bg-gray-50 border rounded-xl">
+        <button id="arenaRecordBtn" class="px-8 py-4 bg-red-600 text-white rounded-full font-bold select-none touch-none text-lg transition-transform hover:scale-105 active:scale-95 shadow-lg">Hold to Speak</button>
+        <div id="arenaRecordStatus" class="text-sm font-bold text-gray-500">Ready</div>
+        <input type="hidden" id="ansVal" value="">
+      </div>
+    `;
+    setupHoldToRecord('arenaRecordBtn', 'arenaRecordStatus', 'ansVal');
+  }
+  else if (q.type === 'text' || q.type === 'writing' || q.type === 'diagram_label' || q.type === 'table_completion') {
+    container.innerHTML = `
+      <textarea id="ansVal" rows="4" class="w-full border rounded p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Type your answer here..." oninput="updateWordCount(this)">${existing}</textarea>
+      <div id="wordCount" class="text-xs text-right mt-1 font-mono text-gray-500">Words: 0</div>
+    `;
+    updateWordCount(document.getElementById('ansVal'));
+  }
+  else if (q.type === 'multiple_choice' || q.type === 'true_false_not_given') {
+    let opts = (q.options && q.options.length) ? q.options : (q.type === 'true_false_not_given' ? ['True', 'False', 'Not Given'] : []);
+    container.innerHTML = `<div class="space-y-2">` +
+      opts.map((opt, i) => `
+        <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+          <input type="radio" name="mcq" value="${opt}" class="w-4 h-4 text-indigo-600" ${cleanStr(existing) === cleanStr(opt) ? 'checked' : ''} onchange="document.getElementById('ansVal').value=this.value">
+          <span class="text-sm font-medium">${opt}</span>
+        </label>
+      `).join('') + `</div><input type="hidden" id="ansVal" value="${existing}">`;
+  } else {
+    container.innerHTML = `<input type="text" id="ansVal" class="w-full border p-3 rounded" value="${existing}">`;
+  }
+}
+
+function updateWordCount(el) {
+  let val = el.value.replace(/\s+/g, ' ').trim();
+  let count = val ? val.split(' ').length : 0;
+  let wc = document.getElementById('wordCount');
+  if(wc) wc.innerText = `Words: ${count}`;
+}
+
+function playTTS() {
+  let text = document.getElementById('qPrompt').innerText;
+  let u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.9;
+  synthesis.speak(u);
+}
+
+function saveCurrent() {
+  let el = document.getElementById('ansVal');
+  if(el) {
+    let val = el.value.replace(/\s+/g, ' ').trim();
+    responses[currentQuestions[qIndex].qNum] = val;
+  }
+}
+
+function prevQuestion() {
+  saveCurrent();
+  if(qIndex > 0) {
+    qIndex--;
+    renderQuestion();
+  } else {
+    nav('readingView');
+  }
+}
+
+function nextQuestion() {
+  saveCurrent();
+  if(qIndex < currentQuestions.length - 1) {
+    qIndex++;
+    renderQuestion();
+  }
+}
+
+function checkCurrentAnswer() {
+  saveCurrent();
+  let q = currentQuestions[qIndex];
+  let ans = responses[q.qNum] || '';
+
+  document.getElementById('checkBtn').classList.add('hidden');
+  let fb = document.getElementById('feedback');
+  fb.classList.remove('hidden');
+  fb.innerHTML = '<p class="text-sm font-bold text-gray-600">Checking...</p>';
+
+  google.script.run.withSuccessHandler(res => {
+    let color = res.isCorrect ? 'bg-green-100 border-green-500 text-green-800' : 'bg-red-100 border-red-500 text-red-800';
+    fb.className = `mt-4 p-4 rounded-xl border ${color}`;
+    fb.innerHTML = `
+      <div class="font-bold mb-2">${res.isCorrect ? '✅ Correct' : '❌ Incorrect'}</div>
+      <div class="text-xs mb-2">Accepted: ${res.acceptedAnswers.join(' OR ')}</div>
+      <div class="text-xs mb-2"><b>Strategy:</b> ${res.strategy}</div>
+    `;
+
+    let isLast = (qIndex === currentQuestions.length - 1);
+    document.getElementById('nextBtn').classList.toggle('hidden', isLast);
+    document.getElementById('submitBlockBtn').classList.toggle('hidden', !isLast);
+  }).checkAnswer({testId: currentTest.testId, qNum: q.qNum, answer: ans});
+}
+
+function submitBlock() {
+  saveCurrent();
+  document.getElementById('submitBlockBtn').innerText = 'Submitting...';
+  document.getElementById('submitBlockBtn').disabled = true;
+
+  google.script.run.withSuccessHandler(res => {
+    if(currentBlock.blockId < 4) {
+      loadBlock(currentBlock.blockId + 1);
+    } else {
+      if(timerInterval) clearInterval(timerInterval);
+      alert(`Test Complete! Total Score: ${res.finalSummary.totalRaw}/50\nBand: ${res.finalSummary.grade.level}`);
+      nav('dashboardView');
+    }
+  }).submitBlockAnswers({testId: currentTest.testId, blockId: currentBlock.blockId, answers: responses});
+}
+
+// --- Hold-to-Record Simulation ---
+function setupHoldToRecord(btnId, statusId, targetInputId) {
+  const btn = document.getElementById(btnId);
+  const status = document.getElementById(statusId);
+  const input = document.getElementById(targetInputId);
+  let recordingTimer = null;
+
+  const startRec = (e) => {
+    e.preventDefault();
+    btn.classList.remove('bg-red-600');
+    btn.classList.add('bg-red-800', 'scale-95');
+    status.innerText = "🔴 Recording...";
+    recordingTimer = setTimeout(() => { stopRec(e); }, 40000); // max 40s
+  };
+
+  const stopRec = (e) => {
+    e.preventDefault();
+    if(recordingTimer) clearTimeout(recordingTimer);
+    btn.classList.remove('bg-red-800', 'scale-95');
+    btn.classList.add('bg-red-600');
+    status.innerText = "✅ Saved (Simulated Audio String)";
+    if(input) input.value = "simulated_audio_base64_string_due_to_browser_restrictions";
+  };
+
+  btn.addEventListener('mousedown', startRec);
+  btn.addEventListener('touchstart', startRec);
+  btn.addEventListener('mouseup', stopRec);
+  btn.addEventListener('touchend', stopRec);
+  btn.addEventListener('mouseleave', (e) => { if(btn.classList.contains('bg-red-800')) stopRec(e); });
+}
+
+// Setup training page rec
+document.addEventListener('DOMContentLoaded', () => {
+  setupHoldToRecord('trainRecordBtn', 'trainStatus', null);
+  nav('dashboardView');
+});
+</script>
+
+</body>
+</html>
