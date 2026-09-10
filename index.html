@@ -203,7 +203,7 @@
 // --- Configuration & State ---
 // Replace the URL below with your actual Google Apps Script Web App Deployment URL
 // Note: Do not use GAS templating (<?= ?>) here if you are hosting this file on GitHub or externally.
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxc0qKH5JG-zGvwgvo4VbqhufkZDZFPITTJy56S79C4wFXhUOq1OAdui4y96dYmL7VC/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxDtyNNGjVRwmy2j2kYS8V9znLABgOF793Vl0U-iQyzna_R2M4TUIryZH7AifDj7Dox/exec';
 
 // API Helper
 async function callApi(action, payload = {}) {
@@ -381,6 +381,10 @@ function generateSampleTest() {
 function handleMassUpload() {
   const input = document.getElementById('massUploadInput');
   if(!input.files.length) return alert('Select .json or .pdf files first');
+
+  const customInfo = prompt("Enter guiding information for the test title (e.g., year, focus area):", "Any guiding information from the pdf, year, focus area etc");
+  if (customInfo === null) return; // User cancelled
+
   const log = document.getElementById('adminLog');
   log.innerHTML = 'Reading files...\n';
 
@@ -392,12 +396,13 @@ function handleMassUpload() {
     const isPdf = file.name.toLowerCase().endsWith('.pdf');
 
     reader.onload = e => {
+      let testTitle = `PTE Test ${packages.length + 1}_${customInfo}`;
       if (isPdf) {
         // e.target.result is a data URL for PDFs
         const base64 = e.target.result.split(',')[1];
-        packages.push({fileName: file.name, data: base64, isPdf: true});
+        packages.push({fileName: file.name, data: base64, isPdf: true, title: testTitle});
       } else {
-        packages.push({fileName: file.name, data: e.target.result, isPdf: false});
+        packages.push({fileName: file.name, data: e.target.result, isPdf: false, title: testTitle});
       }
 
       filesRead++;

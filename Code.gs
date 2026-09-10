@@ -21,7 +21,7 @@ const PTE = {
   VISUAL_FOLDER: 'PTE Visual Assets'
 };
 
-const GEMINI_VISUAL_MODEL = 'gemini-3.8-flash';
+const GEMINI_VISUAL_MODEL = 'gemini-1.5-flash';
 
 function doGet(e) {
   if (e && e.parameter && e.parameter.action) {
@@ -151,9 +151,10 @@ function massUploadExams(payload) {
       if (index >= 10) return; // limit to 10
       let draft;
       if (pkg.isPdf) {
-         draft = generatePackageFromPdf_(pkg.data, pkg.fileName || `PTE_Test_${index+1}.pdf`);
+         draft = generatePackageFromPdf_(pkg.data, pkg.fileName || `PTE_Test_${index+1}.pdf`, pkg.title);
       } else {
          let imported = typeof pkg.data === 'string' ? JSON.parse(pkg.data) : pkg.data;
+         if (pkg.title) imported.title = pkg.title;
          draft = buildDraftFromPackage_(imported, pkg.fileName || `PTE_Test_${index+1}.json`);
       }
 
@@ -1158,7 +1159,7 @@ function getOverallAnalysis() {
   };
 }
 
-function generatePackageFromPdf_(pdfBase64, fileName) {
+function generatePackageFromPdf_(pdfBase64, fileName, customTitle) {
   const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
   if (!apiKey) throw new Error('GEMINI_API_KEY is required for PDF processing.');
 
@@ -1172,16 +1173,20 @@ function generatePackageFromPdf_(pdfBase64, fileName) {
       {
         "blockId": 1,
         "passageTitle": "Speaking Tasks",
-        "passageText": "...",
+        "passageText": "Read the prompts carefully and speak naturally.",
         "questions": [
            {"qNum": 1, "type": "speaking", "prompt": "...", "instruction": "...", "acceptedAnswers": ["Practice estimate: 90 / 90"]}
         ]
       }
     ]
   }
-  Create exactly 50 questions distributed across 4 blocks (1: Speaking Q1-15, 2: Writing Q16-20, 3: Reading Q21-35, 4: Listening Q36-50).
-  Ensure all questions have prompt, instruction, and acceptedAnswers. Multiple choice must have an options array.
-  Do not include markdown blocks, just return raw JSON.`;
+  You must create exactly 50 questions distributed across exactly 4 blocks:
+  - Block 1: Speaking (Q1-15)
+  - Block 2: Writing (Q16-20)
+  - Block 3: Reading (Q21-35)
+  - Block 4: Listening (Q36-50)
+  Ensure every question has a "prompt", "instruction", and "acceptedAnswers" array. Multiple choice questions must have an "options" array.
+  Do not include markdown blocks like \`\`\`json, just return raw JSON.`;
 
   const request = {
     contents: [{parts: [
@@ -1211,5 +1216,6 @@ function generatePackageFromPdf_(pdfBase64, fileName) {
     throw new Error('Failed to parse Gemini JSON response: ' + err.message);
   }
 
+  if (customTitle) imported.title = customTitle;
   return buildDraftFromPackage_(imported, fileName);
 }
