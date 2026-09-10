@@ -75,6 +75,7 @@ function handleApiPost(e) {
       case 'recordReadingCompletion': return jsonResponse(recordReadingCompletion(payload));
       case 'assessPteSpeakingWithGemini': return jsonResponse(assessPteSpeakingWithGemini(payload));
       case 'checkAnswer': return jsonResponse(checkAnswer(payload));
+      case 'generateSamplePteTest': return jsonResponse(generateSamplePteTest());
       default: return jsonResponse({status: 'error', message: 'Unknown action'});
     }
   } catch(error) {
@@ -381,6 +382,59 @@ function questionRow_(testId, question) {
     question.reviewNote || '', new Date().toISOString()
   ];
 }
+
+
+function uploadQuestionVisual(payload) {
+  if (!payload || !payload.testId || !payload.base64Data) {
+    throw new Error('Test ID and image data are required.');
+  }
+
+  const questionStart = Number(payload.questionStart);
+  const questionEnd = Number(payload.questionEnd);
+
+  if (!Number.isInteger(questionStart) || !Number.isInteger(questionEnd) || questionStart < 1 || questionEnd > 50 || questionStart > questionEnd) {
+    throw new Error('Invalid question range for the visual asset.');
+  }
+
+  const blob = Utilities.newBlob( Utilities.base64Decode(payload.base64Data), payload.mimeType || 'image/png', payload.fileName || 'pte-visual.png' );
+
+  const file = getOrCreateVisualFolder_().createFile(blob);
+  const assetId = 'ASSET_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+  const sourcePage = Number(payload.sourcePage || 0);
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const visualSheet = ensureSheet_(ss, PTE.SHEETS.VISUALS, [ 'AssetID', 'TestID', 'SourcePage', 'QuestionStart', 'QuestionEnd', 'AssetType', 'DriveFileID', 'AltText', 'CreatedAt' ]);
+
+  visualSheet.appendRow([ assetId, payload.testId, sourcePage, questionStart, questionEnd, 'admin_uploaded_image', file.getId(), payload.altText || 'Visual reference for Questions ' + questionStart + '–' + questionEnd, new Date().toISOString() ]);
+
+  attachVisualToQuestionRange_(payload.testId, assetId, questionStart, questionEnd, sourcePage);
+
+  return { status: 'success', assetId: assetId, driveFileId: file.getId(), questionStart: questionStart, questionEnd: questionEnd, sourcePage: sourcePage, message: 'Visual attached to Questions ' + questionStart + '–' + questionEnd + '.' };
+}
+
+function attachVisualToQuestionRange_(testId, assetId, questionStart, questionEnd, sourcePage) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(PTE.SHEETS.QUESTIONS);
+  if (!sheet) throw new Error('TestQuestions sheet was not found.');
+
+  const values = sheet.getDataRange().getValues();
+  values.slice(1).forEach((row, index) => {
+    const rowTestId = String(row[0]);
+    const questionNumber = Number(row[1]);
+
+    if (rowTestId === String(testId) && questionNumber >= questionStart && questionNumber <= questionEnd) {
+      const rowNumber = index + 2;
+      sheet.getRange(rowNumber, 11, 1, 4).setValues([[
+        assetId,
+        Number(sourcePage || 0),
+        questionStart,
+        questionEnd
+      ]]);
+    }
+  });
+}
+
+function uploadVisualAsset(payload) { return uploadQuestionVisual(payload); }
 
 function getDraftList() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -808,7 +862,7 @@ function submitBlockAnswers(payload) {
 function answerStrategy_(question) {
   const type = String(question.type || 'text');
   const strategies = {
-    speaking: 'Focus on oral fluency and pronunciation. Do not hesitate or self-correct, and try to speak at a natural pace with clear intonation.',
+    speaking: 'Focus on oral fluency and pronunciation. Do not hesitate or self-correct, and try to speak at a natural pace with clear intonation. If you make a mistake, keep going.',
     diagram_label: 'Step 1: Scan for visual clues or keywords in the image. Step 2: Locate corresponding descriptions in the passage. Step 3: Use exact words from the text.',
     table_completion: 'Step 1: Use row/column headers as anchors. Step 2: Predict grammar and scan the text. Step 3: Copy exact wording respecting word limits.',
     true_false_not_given: 'Step 1: Locate the claim in the text. Step 2: Ensure a full match for True, contradiction for False, and lack of information for Not Given.',
@@ -935,4 +989,94 @@ function getTestAnalysis(testId) {
     qNum: r[4], userAnswer: r[5]
   }));
   return { errors: errors };
+}
+
+
+function generateSamplePteTest() {
+  const testId = 'SAMPLE_' + Date.now();
+  const passages = {
+    p1Title: 'Speaking Tasks', p1Text: 'Read the prompts carefully and speak naturally.',
+    p2Title: 'Writing Tasks', p2Text: 'Focus on spelling, grammar, and meeting the word counts.',
+    p3Title: 'Reading Tasks', p3Text: 'Scan the text efficiently to find the correct information.',
+    p4Title: 'Listening Tasks', p4Text: 'Listen to the audio or read the prompt and respond accurately.'
+  };
+
+  const sampleQuestions = [
+    // Speaking
+    { qNum: 1, blockId: 1, type: 'speaking', prompt: 'Read the following passage aloud: Climate change is one of the biggest challenges facing humanity. Governments, businesses, and individuals all have a role in reducing carbon emissions and protecting natural resources for future generations.', instruction: 'Read Aloud', acceptedAnswers: ['Practice estimate: 90 / 90'] },
+    { qNum: 2, blockId: 1, type: 'speaking', prompt: 'Artificial intelligence is transforming industries by improving productivity and enabling smarter decision-making. However, ethical concerns remain an important topic for researchers.', instruction: 'Read Aloud', acceptedAnswers: ['Practice estimate: 90 / 90'] },
+    { qNum: 3, blockId: 1, type: 'speaking', prompt: 'The conference has been postponed until next Friday.', instruction: 'Repeat Sentence', acceptedAnswers: ['Practice estimate: 90 / 90'] },
+    { qNum: 4, blockId: 1, type: 'speaking', prompt: 'Students should submit their assignments before midnight.', instruction: 'Repeat Sentence', acceptedAnswers: ['Practice estimate: 90 / 90'] },
+    { qNum: 5, blockId: 1, type: 'speaking', prompt: 'Public transportation helps reduce traffic congestion.', instruction: 'Repeat Sentence', acceptedAnswers: ['Practice estimate: 90 / 90'] },
+    { qNum: 6, blockId: 1, type: 'speaking', prompt: 'Describe a bar chart showing: Australia – 35%, Canada – 25%, UK – 20%, USA – 15%, New Zealand – 5%', instruction: 'Describe Image', acceptedAnswers: ['Practice estimate: 90 / 90'] },
+    { qNum: 7, blockId: 1, type: 'speaking', prompt: 'Describe a line graph showing smartphone users from 2018 to 2025 steadily increasing from 40 million to 90 million.', instruction: 'Describe Image', acceptedAnswers: ['Practice estimate: 90 / 90'] },
+    { qNum: 8, blockId: 1, type: 'speaking', prompt: 'A lecture discusses renewable energy sources such as solar, wind, and hydroelectric power and explains their environmental benefits.', instruction: 'Re-tell Lecture', acceptedAnswers: ['Practice estimate: 90 / 90'] },
+    { qNum: 9, blockId: 1, type: 'speaking', prompt: 'A professor explains the importance of effective time management for university students.', instruction: 'Re-tell Lecture', acceptedAnswers: ['Practice estimate: 90 / 90'] },
+    { qNum: 10, blockId: 1, type: 'text', prompt: 'What do bees produce?', instruction: 'Answer Short Question', acceptedAnswers: ['Honey', 'honey'] },
+    { qNum: 11, blockId: 1, type: 'text', prompt: 'Which planet is known as the Red Planet?', instruction: 'Answer Short Question', acceptedAnswers: ['Mars', 'mars'] },
+    { qNum: 12, blockId: 1, type: 'text', prompt: 'What do you use to cut paper?', instruction: 'Answer Short Question', acceptedAnswers: ['Scissors', 'scissors'] },
+    { qNum: 13, blockId: 1, type: 'text', prompt: 'Which animal is known as the king of the jungle?', instruction: 'Answer Short Question', acceptedAnswers: ['Lion', 'lion'] },
+    { qNum: 14, blockId: 1, type: 'text', prompt: 'How many days are there in a leap year?', instruction: 'Answer Short Question', acceptedAnswers: ['366', '366 days'] },
+    { qNum: 15, blockId: 1, type: 'text', prompt: 'What is the opposite of "ancient"?', instruction: 'Answer Short Question', acceptedAnswers: ['Modern', 'modern', 'new'] },
+
+    // Writing
+    { qNum: 16, blockId: 2, type: 'writing', prompt: 'Read a 250-word passage about online education and summarize it in one sentence (5–75 words).', instruction: 'Summarize Written Text', acceptedAnswers: ['sample summary'] },
+    { qNum: 17, blockId: 2, type: 'writing', prompt: 'Read a passage discussing climate change and summarize it in one sentence.', instruction: 'Summarize Written Text', acceptedAnswers: ['sample summary'] },
+    { qNum: 18, blockId: 2, type: 'writing', prompt: 'Should university education be free for all students? Write 200–300 words.', instruction: 'Essay Topic', acceptedAnswers: ['sample essay'] },
+    { qNum: 19, blockId: 2, type: 'writing', prompt: 'Do the advantages of working from home outweigh the disadvantages?', instruction: 'Essay Topic', acceptedAnswers: ['sample essay'] },
+    { qNum: 20, blockId: 2, type: 'writing', prompt: 'Some people believe technology makes life easier, while others think it creates problems. Discuss both views.', instruction: 'Essay Topic', acceptedAnswers: ['sample essay'] },
+
+    // Reading
+    { qNum: 21, blockId: 3, type: 'multiple_choice', prompt: 'Which gas do plants absorb?', instruction: 'Multiple Choice (Single Answer)', options: ['Oxygen', 'Carbon Dioxide', 'Nitrogen', 'Hydrogen'], acceptedAnswers: ['Carbon Dioxide'] },
+    { qNum: 22, blockId: 3, type: 'multiple_choice', prompt: 'Which are renewable energy sources?', instruction: 'Multiple Choice (Multiple Answers)', options: ['Solar', 'Wind', 'Coal', 'Hydroelectric'], acceptedAnswers: ['Solar, Wind, Hydroelectric'] },
+    { qNum: 23, blockId: 3, type: 'text', prompt: 'Arrange: Finally, the report was published. | Researchers collected data. | The project began in January. | The findings were analyzed.', instruction: 'Re-order Paragraph (Type sequence)', acceptedAnswers: ['The project began in January. Researchers collected data. The findings were analyzed. Finally, the report was published.'] },
+    { qNum: 24, blockId: 3, type: 'multiple_choice', prompt: 'Exercise regularly because it helps improve your .', instruction: 'Fill in the Blanks', options: ['Health', 'Weather', 'Traffic', 'Furniture'], acceptedAnswers: ['Health'] },
+    { qNum: 25, blockId: 3, type: 'multiple_choice', prompt: 'The scientist carefully the experiment.', instruction: 'Fill in the Blanks', options: ['Conducted', 'Ate', 'Bought', 'Slept'], acceptedAnswers: ['Conducted'] },
+    { qNum: 26, blockId: 3, type: 'multiple_choice', prompt: 'The company plans to production next year.', instruction: 'Reading & Writing Fill in the Blanks', options: ['Increase', 'Break', 'Sleep', 'Wash'], acceptedAnswers: ['Increase'] },
+    { qNum: 27, blockId: 3, type: 'multiple_choice', prompt: 'The museum attracts thousands of every year.', instruction: 'Reading & Writing Fill in the Blanks', options: ['Visitors', 'Doctors', 'Cars', 'Rivers'], acceptedAnswers: ['Visitors'] },
+    { qNum: 28, blockId: 3, type: 'multiple_choice', prompt: 'Why is recycling important?', instruction: 'Multiple Choice', options: ['Saves resources', 'Increases pollution', 'Wastes energy', 'Reduces education'], acceptedAnswers: ['Saves resources'] },
+    { qNum: 29, blockId: 3, type: 'text', prompt: 'Arrange: She completed her research. | She enrolled in university. | She published her paper. | She graduated.', instruction: 'Re-order Paragraph (Type sequence)', acceptedAnswers: ['She enrolled in university. She completed her research. She graduated. She published her paper.'] },
+    { qNum: 30, blockId: 3, type: 'multiple_choice', prompt: 'The meeting was due to bad weather.', instruction: 'Fill in the Blank', options: ['Postponed', 'Cooked', 'Painted', 'Jumped'], acceptedAnswers: ['Postponed'] },
+    { qNum: 31, blockId: 3, type: 'multiple_choice', prompt: "The manager appreciated the employee's .", instruction: 'Fill in the Blank', options: ['Dedication', 'Rain', 'Window', 'Bicycle'], acceptedAnswers: ['Dedication'] },
+    { qNum: 32, blockId: 3, type: 'multiple_choice', prompt: 'Education provides people with valuable .', instruction: 'Reading Fill in Blank', options: ['Knowledge', 'Chairs', 'Clouds', 'Cars'], acceptedAnswers: ['Knowledge'] },
+    { qNum: 33, blockId: 3, type: 'multiple_choice', prompt: 'Which animal is a mammal?', instruction: 'Multiple Choice', options: ['Dolphin', 'Shark', 'Trout', 'Octopus'], acceptedAnswers: ['Dolphin'] },
+    { qNum: 34, blockId: 3, type: 'multiple_choice', prompt: 'Scientists continue to new medicines.', instruction: 'Reading Fill in Blank', options: ['Develop', 'Forget', 'Destroy', 'Ignore'], acceptedAnswers: ['Develop'] },
+    { qNum: 35, blockId: 3, type: 'text', prompt: 'Arrange: Seeds were planted. | Plants started growing. | Flowers bloomed. | Fruits appeared.', instruction: 'Re-order Paragraph (Type sequence)', acceptedAnswers: ['Seeds were planted. Plants started growing. Flowers bloomed. Fruits appeared.'] },
+
+    // Listening
+    { qNum: 36, blockId: 4, type: 'writing', prompt: 'Listen to a lecture about global warming and summarize it in 50–70 words.', instruction: 'Summarize Spoken Text', acceptedAnswers: ['sample summary'] },
+    { qNum: 37, blockId: 4, type: 'multiple_choice', prompt: 'The speaker mainly discusses:', instruction: 'Multiple Choice', options: ['Education', 'Climate Change', 'Sports', 'Music'], acceptedAnswers: ['Climate Change'] },
+    { qNum: 38, blockId: 4, type: 'text', prompt: 'The professor explained that renewable energy reduces emissions.', instruction: 'Fill in the Blanks (Type missing words)', acceptedAnswers: ['carbon', 'greenhouse gas'] },
+    { qNum: 39, blockId: 4, type: 'multiple_choice', prompt: 'Choose the summary that best matches the lecture.', instruction: 'Highlight Correct Summary', options: ['Correct Summary', 'Incorrect 1', 'Incorrect 2', 'Incorrect 3'], acceptedAnswers: ['Correct Summary'] },
+    { qNum: 40, blockId: 4, type: 'multiple_choice', prompt: 'Select the benefits of exercise mentioned by the speaker.', instruction: 'Multiple Choice (Multiple Answers)', options: ['Health', 'Wealth', 'Fitness', 'Fame'], acceptedAnswers: ['Health', 'Fitness'] },
+    { qNum: 41, blockId: 4, type: 'multiple_choice', prompt: 'The lecture ends with: "The future of education depends on continuous ."', instruction: 'Select Missing Word', options: ['learning', 'sleeping', 'eating', 'driving'], acceptedAnswers: ['learning'] },
+    { qNum: 42, blockId: 4, type: 'text', prompt: 'Listen and identify words that differ from the transcript.', instruction: 'Highlight Incorrect Words', acceptedAnswers: ['incorrect'] },
+    { qNum: 43, blockId: 4, type: 'text', prompt: 'Education is the foundation of a successful career.', instruction: 'Write From Dictation', acceptedAnswers: ['Education is the foundation of a successful career.'] },
+    { qNum: 44, blockId: 4, type: 'text', prompt: 'Technology has changed the way people communicate.', instruction: 'Write From Dictation', acceptedAnswers: ['Technology has changed the way people communicate.'] },
+    { qNum: 45, blockId: 4, type: 'text', prompt: 'Regular exercise improves both physical and mental health.', instruction: 'Write From Dictation', acceptedAnswers: ['Regular exercise improves both physical and mental health.'] },
+    { qNum: 46, blockId: 4, type: 'text', prompt: 'Climate change affects every country in the world.', instruction: 'Write From Dictation', acceptedAnswers: ['Climate change affects every country in the world.'] },
+    { qNum: 47, blockId: 4, type: 'text', prompt: 'Students should practice English every day.', instruction: 'Write From Dictation', acceptedAnswers: ['Students should practice English every day.'] },
+    { qNum: 48, blockId: 4, type: 'text', prompt: 'Innovation drives economic growth and development.', instruction: 'Write From Dictation', acceptedAnswers: ['Innovation drives economic growth and development.'] },
+    { qNum: 49, blockId: 4, type: 'text', prompt: 'Reading books helps improve vocabulary and comprehension.', instruction: 'Write From Dictation', acceptedAnswers: ['Reading books helps improve vocabulary and comprehension.'] },
+    { qNum: 50, blockId: 4, type: 'text', prompt: 'Success requires patience, dedication, and hard work.', instruction: 'Write From Dictation', acceptedAnswers: ['Success requires patience, dedication, and hard work.'] }
+  ];
+
+  const draft = {
+    testId: testId,
+    title: 'PTE 50-Question Sample Exam (2026)',
+    sourceFileName: 'Internal Generation',
+    status: 'DRAFT — READY FOR REVIEW',
+    passages: passages,
+    settings: {
+      requireReadingCompletion: true,
+      immediateFeedback: true,
+      showRunningScore: true,
+      enablePostBlockReview: true,
+      published: false
+    },
+    questions: normaliseQuestions_(sampleQuestions)
+  };
+
+  saveNewDraft_(draft);
+  return getAdminDraft(draft.testId);
 }
