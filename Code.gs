@@ -812,7 +812,7 @@ function assessPteSpeakingWithGemini(payload) {
   };
 
   const response = UrlFetchApp.fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(apiKey),
+    'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey),
     {method: 'post', contentType: 'application/json', payload: JSON.stringify(request), muteHttpExceptions: true}
   );
 
@@ -1197,7 +1197,7 @@ function generatePackageFromPdf_(pdfBase64, fileName, customTitle) {
   };
 
   const response = UrlFetchApp.fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(apiKey),
+    'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey),
     {method: 'post', contentType: 'application/json', payload: JSON.stringify(request), muteHttpExceptions: true}
   );
 
